@@ -1,0 +1,59 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
+import os
+
+
+__path__ = os.path.abspath(os.path.dirname(__file__))
+VRSUMM_DATA_PATH = os.path.normpath(os.path.join(__path__, "/data1/common_datasets/vrsumm"))
+
+
+class ModelConfig(object):
+
+    def __init__(self):
+        self.model_name = "cvs"
+        self.input_file_pattern = os.path.join(VRSUMM_DATA_PATH, "TFRecord/HIGH/train_pos-????-of-0100")
+        self.video_hdf_path = os.path.join(VRSUMM_DATA_PATH, "features", "RESNET.hdf5")
+        self.image_format = "jpeg"
+        self.values_per_input_shard = 2000
+        self.input_queue_capacity_factor = 2
+        self.num_input_reader_threads = 2
+        self.num_preprocess_threads = 12
+
+        self.batch_size = 12
+
+        self.video_height = 112
+        self.video_width = 112
+        self.video_steps = 16
+
+        self.image_feature_name = "image/data"
+        self.inception_checkpoint_file = "/data1/yj/vrsumm/PretrainedModules/inception_v3.ckpt"
+        self.c3d_checkpoint_file = "/data1/yj/vrsumm/PretrainedModules/sports1m_finetuning_ucf101.model"
+        self.c3d_mean_file = "/data1/yj/vrsumm/PretrainedModules/c3d_mean.npy"
+
+        self.initializer_scale = 0.08
+        self.dropout_keep_prob = 0.7
+
+        self.final_activation = 'sigmoid'
+
+class TrainingConfig(object):
+    """ Wrapper class for training hyperparameters"""
+
+    def __init__(self):
+        """Sets the default training hyperparameters"""
+        self.num_examples_per_epoch = 99999
+        self.optimizer = "SGD"
+        # Learning rate for the initial phase of training.
+        self.initial_learning_rate = 0.01
+        self.learning_rate_decay_factor = 0.5
+        self.num_epochs_per_decay = 8.0
+
+        # Learning rate when fine tuning the Inception v3 parameters.
+        self.train_inception_learning_rate = 0.00005
+
+        # If not None, clip gradients to this value.
+        self.clip_gradients = 5.0
+
+        # How many model checkpoints to keep.
+        self.max_checkpoints_to_keep = 5
