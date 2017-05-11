@@ -10,8 +10,7 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-import scipy.io as sio
-import pudb
+import h5py
 tf.flags.DEFINE_string("video_dir", "../../dataset/vid_frm",
                        "Video frame dirctory.")
 
@@ -58,9 +57,9 @@ def _int64_feature(value):
     return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
 
 
-def _float32_feature(value):
+def _float_feature(value):
     """Wrapper for inserting an int64 Feature into a SequenceExample proto."""
-    return tf.train.Feature(float32_list=tf.train.Float32List(value=[value]))
+    return tf.train.Feature(float_list=tf.train.FloatList(value=[value]))
 
 
 def _bytes_feature(value):
@@ -72,9 +71,9 @@ def _int64_feature_list(values):
     """Wrapper for inserting an int64 FeatureList into a SequenceExample proto."""
     return tf.train.FeatureList(feature=[_int64_feature(v) for v in values])
 
-def _float32_feature_list(values):
+def _float_feature_list(values):
     """Wrapper for inserting an float32 FeatureList into a SequenceExample proto."""
-    return tf.train.FeatureList(feature=[_float32_feature(v) for v in values])
+    return tf.train.FeatureList(feature=[_float_feature(v) for v in values])
 
 
 def _bytes_feature_list(values):
@@ -92,7 +91,7 @@ def _to_sequence_example(video):
         A SequenceExample proto.
     """
 
-    if FLAGS.type in ["V2G","HIGH","HIGH2"]:
+    if FLAGS.type in ["VAS"]:
         tp = FLAGS.type
         context = tf.train.Features(feature={
             tp+"/video_id": _bytes_feature(video.video_id),
@@ -117,13 +116,18 @@ def _to_sequence_example(video):
             frms = temp
 
         frm_paths = [os.path.join(video.video_path, frm) for frm in frms]
-        mat_dat = sio.loadmat(video.information['rawdata'])
-        pudb.set_trace()
-        pupil_size = np.mean(mat_dat.pupil_size)
+        mat_dat = h5py.File(video.information['rawdata']).get(video.information["key"])
+        pupil_data = []
+        for sub_name, subject in mat_dat.iteritems():
+            try:
+                pupil_data.append(subject['pupilsize'].value)
+            except:
+                continue
+        pupil_size = np.mean(pupil_data,axis=0).tolist()[0]
         # 1 is high, 0 is non-high
         feature_lists = tf.train.FeatureLists(feature_list={
             tp+"/frm_paths": _bytes_feature_list(frm_paths),
-            tp+"/pupil_size": _float32_feature_list(pupil_size),
+            tp+"/pupil_size": _float_feature_list(pupil_size),
         })
         sequence_example = tf.train.SequenceExample(
             context=context, feature_lists=feature_lists)
@@ -268,14 +272,14 @@ def main(unused_argv):
         tf.gfile.MakeDirs(FLAGS.output_dir)
 
     train_pos = _load_and_process_metadata(FLAGS.train_positive_file)
-    #val_dataset = _load_and_process_metadata(FLAGS.val_dataframe_file)
+    val_dataset = _load_and_process_metadata(FLAGS.val_dataframe_file)
     #test_dataset = _load_and_process_metadata(FLAGS.test_dataframe_file)
 
     #train_captions = [video.information["caption"] for video in train_dataset]
 
     _process_dataset("train", train_pos, FLAGS.train_shards)
 
-    #_process_dataset("val", val_dataset, FLAGS.val_shards)
+    _process_dataset("val", val_dataset, FLAGS.val_shards)
     #_process_dataset("test", test_dataset, FLAGS.test_shards)
 
 

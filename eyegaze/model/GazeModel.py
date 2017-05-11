@@ -5,8 +5,6 @@ from __future__ import print_function
 
 import tensorflow as tf
 import numpy as np
-import tfplot
-import tfplot.summary
 from eyegaze.op import image_embedding
 from eyegaze.op import inputs as input_ops
 from eyegaze.op import video_processing
@@ -61,8 +59,8 @@ class GazeModel(object):
     def is_training(self):
         return self.mode == "train"
 
-    def process_video(self, frm_paths, thread_id=0):
-        return video_processing.process_video(frm_paths,
+    def process_video_pupil(self, frm_paths, thread_id=0):
+        return video_processing.process_video_pupil(frm_paths,
                                               is_training=self.is_training(),
                                               step_length=16,
                                               height=self.config.video_height,
@@ -94,7 +92,7 @@ class GazeModel(object):
                 dataset_prefix+"/key": tf.FixedLenFeature([], tf.string),
             },
             sequence_features={
-                dataset_prefix+"/pupil_size": tf.FixedLenSequenceFeature([], dtype=tf.float32)
+                dataset_prefix+"/pupil_size": tf.FixedLenSequenceFeature([], dtype=tf.float32),
                 dataset_prefix+"/frm_paths": tf.FixedLenSequenceFeature([], dtype=tf.string)
             })
 
@@ -137,7 +135,8 @@ class GazeModel(object):
                 #video = tf.stack([video_pos,video_neg],axis=1)
                 serialized_sequence_example = input_queue.dequeue()
                 feature_pos = self.parse_subshot_example(serialized_sequence_example)
-                video = self.process_video_pupil(feature_pos["frm_paths"], feature_pos["pupil_size"])
+                video = self.process_video_pupil(feature_pos["frm_paths"])
+                pupil_size = feature_pos["pupil_size"]
                 enqueue_list.append([video, pupil_size])
 
             # Batch inputs.
@@ -167,7 +166,8 @@ class GazeModel(object):
         inception_output = image_embedding.inception_v3(
             video_batch,
             trainable=self.train_inception,
-            is_training=self.is_training())
+            is_training=self.is_training(),
+            pooled=True)
         self.inception_variables = tf.get_collection(
             tf.GraphKeys.GLOBAL_VARIABLES, scope="InceptionV3")
         '''
@@ -204,8 +204,8 @@ class GazeModel(object):
         zero_state = lstm_cell.zero_state(
             batch_size=self.config.batch_size, dtype=tf.float32)
         video_batch = tf.reshape(self.image_embeddings, [self.config.batch_size, -1, self.config.embedding_size])
-        output_states, final_state = lstm_cell(video_batch, zero_state)
-        pudb.set_trace()
+        video_batch = tf.unstack(video_batch,axis=1)
+        output_states, final_state = tf.contrib.rnn.static_rnn(lstm_cell, video_batch, zero_state)
         output_state_pack = tf.transpose(tf.stack(output_states), [1,0,2])
         with tf.variable_scope("pupil_score") as scope:
              pupil_score = tf.contrib.layers.fully_connected(

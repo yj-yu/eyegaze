@@ -147,7 +147,6 @@ def process_image(encoded_image,
   return image
 
 def process_video_pupil(frm_paths,
-                        pupil_size,
                         is_training,
                         step_length,
                         height,
